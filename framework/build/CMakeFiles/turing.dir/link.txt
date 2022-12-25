@@ -1,0 +1,1 @@
+/usr/bin/g++ "CMakeFiles/turing.dir/turing-project/TM.cpp.o" "CMakeFiles/turing.dir/turing-project/main.cpp.o" -o /home/oslab/project-2022-stu/framework/bin/turing 

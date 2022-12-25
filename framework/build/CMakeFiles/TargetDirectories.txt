@@ -1,0 +1,3 @@
+/home/oslab/project-2022-stu/framework/build/CMakeFiles/turing.dir
+/home/oslab/project-2022-stu/framework/build/CMakeFiles/edit_cache.dir
+/home/oslab/project-2022-stu/framework/build/CMakeFiles/rebuild_cache.dir

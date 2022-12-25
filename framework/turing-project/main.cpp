@@ -43,7 +43,7 @@ bool parse(vector<string>& params, string& path, string& input) {
 }
 
 int main(int argc, char* argv[]){
-    /*vector<string> params;
+    vector<string> params;
     for (int i = 0; i < argc; i++) {
         params.push_back(argv[i]);
     }
@@ -53,14 +53,15 @@ int main(int argc, char* argv[]){
     else {
         TM tm(path);
         tm.parse();
+        tm.check(input);
         tm.turing(input);
-    }*/
-    string path = "../palindrome_detector_2tapes.tm";
+    }
+    /*string path = "../palindrome_detector_2tapes.tm";
     string input = "10001";
     TM tm(path);
     //p.show_content();
     tm.parse();
     //p.show_parse();
-    tm.turing(input);
+    tm.turing(input);*/
     return 0;
 }

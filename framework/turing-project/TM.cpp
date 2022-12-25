@@ -1,6 +1,10 @@
 #include "TM.h"
 #include <fstream>
 #include <iostream>
+#include <set>
+using namespace std;
+
+bool VERBOSE = 0;
 
 Transition::Transition(string nst, string nsym, string d)
     : newState(nst)
@@ -119,6 +123,151 @@ void TM::parse() {
     }
 }
 
+void TM::check(string& input) {
+    // check states and symbols
+    set<string> allStates, allSymbols, inputSymbols;
+    for(auto & it : Q) {
+        allStates.insert(it);
+    }
+
+    if(allStates.find(q0) == allStates.end()) {
+        cerr << "syntax error" << endl;
+        if(VERBOSE) {
+            cerr << "q0: " << q0 << " is not in States set." << endl;
+        }
+        exit(-1); 
+    }
+
+    for(auto & final : F) {
+        if(allStates.find(final) == allStates.end()) {
+            cerr << "syntax error" << endl;
+            if(VERBOSE) {
+            cerr << "final state: " << final << " is not in States set." << endl;
+            }
+            exit(-1); 
+        }
+    }
+
+    for(auto &it : G) {
+        if(it == " " || it == "," || it == ";" || it == "{" || it == "}" || it == "*") {
+            cerr << "syntax error" << endl;
+            if(VERBOSE) {
+                cerr << "Tape symbol: " << it << " is not illegal." << endl;
+            }
+            exit(-1);
+        }
+        allSymbols.insert(it);
+    }
+
+    for(auto &sym : S) {
+        if(sym == " " || sym == "," || sym == ";" || sym == "{" || sym == "}" || sym == "*" || sym == "_") {
+            cerr << "syntax error" << endl;
+            if(VERBOSE) {
+                cerr << "Input symbol: " << sym << " is not illegal." << endl;
+            }
+            exit(-1);
+        }
+
+        if(allSymbols.find(sym) == allSymbols.end()) {
+            cerr << "syntax error" << endl;
+            if(VERBOSE) {
+            cerr << "Input symbol: " << sym << " is not in Symbols set." << endl;
+            }
+            exit(-1); 
+        }
+        else {
+            inputSymbols.insert(sym);
+        }
+    }
+
+    for(auto it = delta.begin(); it != delta.end(); it++){
+        string oldstate = it->first;
+        if(allStates.find(oldstate) == allStates.end()) {
+            cerr << "syntax error" << endl;
+            if(VERBOSE) {
+                cerr << "States in delta function: " << oldstate << " is not in States set." << endl;
+            }
+            exit(-1); 
+        }
+
+        auto mp = it->second;
+        for(auto iter = mp.begin();iter != mp.end();iter++) {
+            string oldsymbols = iter->first;
+            for(int i = 0;i < oldsymbols.length();i++) {
+                string temp;
+                temp.push_back(oldsymbols[i]);
+                if(allSymbols.find(temp) == allSymbols.end()) {
+                    cerr << "syntax error" << endl;
+                    if(VERBOSE) {
+                        cerr << "Symbol in delta function: " << temp << " is not in Symbols set." << endl;
+                    }
+                    exit(-1); 
+                }
+            }
+
+            Transition trans = iter->second;
+            if(allStates.find(trans.newState) == allStates.end()) {
+                cerr << "syntax error" << endl;
+                if(VERBOSE) {
+                    cerr << "State in delta function: " << trans.newState << " is not in States set." << endl;
+                }
+                exit(-1); 
+            }
+            for(auto ch : trans.dir) {
+                if(ch != 'l' && ch != 'r' && ch != '*') {
+                    cerr << "syntax error" << endl;
+                    if(VERBOSE) {
+                        cerr << "Direction in delta function: " << ch << " is illegal." << endl;
+                    }
+                    exit(-1); 
+                }
+            }
+            for(int i = 0;i < trans.newSym.length();i++) {
+                string tmp;
+                tmp.push_back(trans.newSym[i]);
+                if(allSymbols.find(tmp) == allSymbols.end()) {
+                    cerr << "syntax error" << endl;
+                    if(VERBOSE) {
+                        cerr << "Symbol in delta function: " << tmp << " is not in Symbols set." << endl;
+                    }
+                    exit(-1); 
+                }
+            }
+        }
+    }
+
+    // check input
+    for(int k = 0;k < input.length();k++) {
+        string s;
+        s.push_back(input[k]);
+        if(inputSymbols.find(s) == inputSymbols.end()) {
+            if(VERBOSE) {
+                cerr << "Input: " << input << endl;
+                cerr << "==================== ERR ====================\n";
+                cerr << "error: '" << s << "'was not declared in the set of input symbols" << endl;
+                cerr << "Input: " << input << endl;
+                string blank = "       ";
+                for(int l = 0;l < k;l++) {
+                    blank.push_back(' ');
+                }
+                blank.push_back('^');
+                cerr << blank << endl;
+                cerr << "==================== END ====================\n";
+            }
+            else {
+                cerr << "illegal input" << endl;
+            }
+
+            exit(-1);
+        }
+    }
+
+    if(VERBOSE) {
+        cout << "Input: " << input << endl;
+        cout<<"==================== RUN ====================\n";
+    }
+}
+
 void TM::turing(string& input) {
     steps = 0;
     for (int i = 0; i < N; i++) {
@@ -220,7 +369,7 @@ void TM::execute(Transition& next) {
 }
 
 void TM::show_details() {
-    cout << "Step   : " << steps << endl;
+    cout << "Step   : " << steps << endl << "State  : " << curState << endl;
     for (int i = 0; i < N; i++) {
         string index = "Index";
         string tape = "Tape";
@@ -255,10 +404,8 @@ void TM::show_details() {
             }
             else {
                 cout << j;
-            }
-            //if(j!=setOfTape[i].index_end){
+            }  
             cout << " ";
-            //}
         }
         cout << endl;
         cout << tape;
@@ -292,7 +439,6 @@ void TM::show_details() {
         cout << "^" << endl;
 
     }
-    cout << "State  : " << curState << endl;
     cout << "---------------------------------------------\n";
 }
 

@@ -8,7 +8,7 @@
 #include <regex>
 using namespace std;
 
-bool VERBOSE = 0;
+extern bool VERBOSE;
 
 class Transition {
 public:
@@ -49,6 +49,7 @@ public:
     void Stringsplit(string str, const char split, vector<string>& rst);
     void execute(Transition& next);
     void turing(string& input);
+    void check(string& input);
     void show_details();
     void show_content();
     void show_parse();
