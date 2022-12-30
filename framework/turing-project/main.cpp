@@ -52,16 +52,11 @@ int main(int argc, char* argv[]){
     if (!success) return 0;
     else {
         TM tm(path);
+        //tm.show_content();
         tm.parse();
+        //tm.show_parse();
         tm.check(input);
         tm.turing(input);
     }
-    /*string path = "../palindrome_detector_2tapes.tm";
-    string input = "10001";
-    TM tm(path);
-    //p.show_content();
-    tm.parse();
-    //p.show_parse();
-    tm.turing(input);*/
     return 0;
 }

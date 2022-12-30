@@ -2,12 +2,14 @@
 #include <fstream>
 #include <iostream>
 #include <set>
+#include <map>
 using namespace std;
 
 bool VERBOSE = 0;
 
-Transition::Transition(string nst, string nsym, string d)
+Transition::Transition(string nst, string osym, string nsym, string d)
     : newState(nst)
+    , oldSym(osym)
     , newSym(nsym)
     , dir(d) {}
 
@@ -15,8 +17,8 @@ void Transition::show_trans() {
     cout << dir << ") -> (" << newSym << ", " << newState << ")" << endl;
 }
 
-Tape::Tape(string t, int head, int tail, int pointer)
-    : content(t)
+Tape::Tape(string cnt, int head, int tail, int pointer)
+    : content(cnt)
     , begin(head)
     , end(tail)
     , ptr(pointer) {}
@@ -31,6 +33,9 @@ TM::TM(string path) {
     }
     else {
         cerr << "syntax error" << endl;
+        if(VERBOSE) {
+            cerr << "Failed to open the file " << path << endl;
+        }
         exit(-1);
     }
 }
@@ -45,7 +50,7 @@ void TM::Stringsplit(string str, const char split, vector<string>& rst) {
 
 void TM::parse() {
     regex rQ("#Q = \\{(.+)\\}");
-    regex rS("#S = \\{(.+)\\}");
+    regex rS("#S = \\{(.*)\\}");
     regex rG("#G = \\{(.+)\\}");
     regex rq0("#q0 = (.+)");
     regex rB("#B = (_)");
@@ -62,11 +67,9 @@ void TM::parse() {
             if (ch == ';') break;
             line += ch;
         }
-        if (!line.length()) continue;
-        // the shortest length
-        if (line.length() <= 5) {
-            exit(-1);
-        }
+        //cout << "line: " << line << endl << "length: " << line.length() << endl;
+        if (line.length() == 0) continue;
+       
         fQ = regex_match(line, mQ, rQ);
         fS = regex_match(line, mS, rS);
         fG = regex_match(line, mG, rG);
@@ -77,6 +80,7 @@ void TM::parse() {
         fb = regex_match(line, mb, rb);
 
         if (fb) {
+            //cout << "empty line" << endl;
             continue;
         }
         else if (fQ) {
@@ -102,6 +106,10 @@ void TM::parse() {
             N = stoi(mN.str(1));
         }
         else {
+            while(line != "") {
+                if(line.back() == ' ') line.pop_back();
+                else break;
+            }
             vector<string> tmp;
             Stringsplit(line, ' ', tmp);
             if (tmp.size() != 5) {
@@ -110,14 +118,14 @@ void TM::parse() {
             }
             bool one_in_map = delta.find(tmp[0]) != delta.end() ? true : false;
             if (one_in_map) {
-                Transition* trans = new Transition(tmp[4], tmp[2], tmp[3]);
-                delta[tmp[0]].insert(make_pair(tmp[1], *trans));
+                Transition* trans = new Transition(tmp[4], tmp[1], tmp[2], tmp[3]);
+                delta[tmp[0]].emplace_back(*trans);
             }
             else {
-                Transition* trans = new Transition(tmp[4], tmp[2], tmp[3]);
-                unordered_map<string, Transition> m;
-                m.insert(make_pair(tmp[1], *trans));
-                delta.insert(make_pair(tmp[0], m));
+                Transition* trans = new Transition(tmp[4], tmp[1], tmp[2], tmp[3]);
+                vector<Transition> temptrans;
+                temptrans.emplace_back(*trans);
+                delta.insert(make_pair(tmp[0], temptrans));
             }
         }
     }
@@ -126,6 +134,8 @@ void TM::parse() {
 void TM::check(string& input) {
     // check states and symbols
     set<string> allStates, allSymbols, inputSymbols;
+    allSymbols.insert("*");
+    allSymbols.insert("_");
     for(auto & it : Q) {
         allStates.insert(it);
     }
@@ -192,10 +202,11 @@ void TM::check(string& input) {
 
         auto mp = it->second;
         for(auto iter = mp.begin();iter != mp.end();iter++) {
-            string oldsymbols = iter->first;
+            string oldsymbols = iter->oldSym;
+            
             for(int i = 0;i < oldsymbols.length();i++) {
                 string temp;
-                temp.push_back(oldsymbols[i]);
+                temp = oldsymbols[i];
                 if(allSymbols.find(temp) == allSymbols.end()) {
                     cerr << "syntax error" << endl;
                     if(VERBOSE) {
@@ -205,7 +216,7 @@ void TM::check(string& input) {
                 }
             }
 
-            Transition trans = iter->second;
+            Transition trans = *iter;
             if(allStates.find(trans.newState) == allStates.end()) {
                 cerr << "syntax error" << endl;
                 if(VERBOSE) {
@@ -222,9 +233,10 @@ void TM::check(string& input) {
                     exit(-1); 
                 }
             }
+
             for(int i = 0;i < trans.newSym.length();i++) {
                 string tmp;
-                tmp.push_back(trans.newSym[i]);
+                tmp = trans.newSym[i];
                 if(allSymbols.find(tmp) == allSymbols.end()) {
                     cerr << "syntax error" << endl;
                     if(VERBOSE) {
@@ -268,6 +280,20 @@ void TM::check(string& input) {
     }
 }
 
+int TM::symbols_cmp(string pattern, string cur) {
+    int star = 0;
+    for(int i = 0;i < pattern.size();i++) {
+        if(pattern[i] == '*' && cur[i] != '_') {
+            star++;
+            continue;
+        }
+        else if(pattern[i] != cur[i]) {
+            return -1;
+        }
+    }
+    return star;
+}
+
 void TM::turing(string& input) {
     steps = 0;
     for (int i = 0; i < N; i++) {
@@ -294,13 +320,19 @@ void TM::turing(string& input) {
         for (int i = 0; i < N; i++) {
             curSymbol.push_back(Tapes[i].content[Tapes[i].ptr - Tapes[i].begin]);
         }
-        
+        //cout << "curSymbol: " << curSymbol << endl;
         auto& mp = trans->second;
-        auto nxt = mp.find(curSymbol);
-        
-        if (nxt == mp.end()) break;
+        map<int, Transition> choice;
+        for(auto nxt = mp.begin();nxt != mp.end();nxt++) {
+            int star = symbols_cmp(nxt->oldSym, curSymbol);
+            if (star != -1) {
+                choice.insert(make_pair(star, *nxt));
+            }
+        }
+
+        if (!choice.size()) break;
         else {
-            execute(nxt->second);
+            execute(choice.begin()->second);
             steps++;
         }
     }
@@ -316,12 +348,16 @@ void TM::turing(string& input) {
 
 void TM::execute(Transition& next) {
     curState = next.newState;
+    string oldSymbols = next.oldSym;
     string newSymbols = next.newSym;
     string directions = next.dir;
+    //cout << "next Step: " << endl << "State change to " << curState <<", oldsymbols " << oldSymbols <<", newsymbols " << newSymbols << ", direction " << directions << endl << endl;
 
     for (int i = 0; i < N; i++) {
-        Tapes[i].content[Tapes[i].ptr - Tapes[i].begin] = newSymbols[i];
-        int preptr = Tapes[i].ptr;
+        if(oldSymbols[i] != '*' || (oldSymbols[i] == '*' && newSymbols[i] != '*')) {
+            Tapes[i].content[Tapes[i].ptr - Tapes[i].begin] = newSymbols[i];
+        }
+
         if (directions[i] == 'l') {
             Tapes[i].ptr--;
         }
@@ -338,32 +374,14 @@ void TM::execute(Transition& next) {
             Tapes[i].content.insert(0, "_");
             Tapes[i].begin = Tapes[i].ptr;
         }
-        
-        // handle useless blanks 
-        if (Tapes[i].ptr >= Tapes[i].begin && Tapes[i].ptr <= Tapes[i].end) {
-            if (Tapes[i].ptr == Tapes[i].begin) {
-                if (Tapes[i].content.length() > 1 && Tapes[i].content.back() == '_') {
-                    Tapes[i].end--;
-                    Tapes[i].content.pop_back();
-                }
-            }
-            else if (Tapes[i].ptr == Tapes[i].end) {
-                if (Tapes[i].content.length() > 1 && Tapes[i].content[0] == '_') {
-                    Tapes[i].begin++;
-                    Tapes[i].content.erase(0, 1);
-                }
-            }
-            else {
-                if (Tapes[i].ptr + 1 - Tapes[i].begin < Tapes[i].content.length() && Tapes[i].content.back() == '_') {
-                    Tapes[i].end--;
-                    Tapes[i].content.pop_back();
-                }
-                
-                if (Tapes[i].ptr - 1 - Tapes[i].begin >= 0 && Tapes[i].content[0] == '_') {
-                    Tapes[i].begin++;
-                    Tapes[i].content.erase(0, 1);
-                }
-            }
+        // handle useless blanks
+        while(Tapes[i].begin < Tapes[i].ptr && Tapes[i].content[0] == '_') {
+            Tapes[i].begin++;
+            Tapes[i].content.erase(0, 1);
+        }
+        while(Tapes[i].end > Tapes[i].ptr && Tapes[i].content.back() == '_') {
+            Tapes[i].end--;
+            Tapes[i].content.pop_back();
         }
     }
 }
@@ -371,31 +389,29 @@ void TM::execute(Transition& next) {
 void TM::show_details() {
     cout << "Step   : " << steps << endl << "State  : " << curState << endl;
     for (int i = 0; i < N; i++) {
-        string index = "Index";
-        string tape = "Tape";
-        string Head = "Head";
-        int t = i / 10;
-        if (t == 0) {
-            index.push_back((char)(i + '0'));
+        string index = "Index", tape = "Tape", head = "head";
+        int cnt = i / 10;
+        if (cnt == 0) {
+            index.push_back(i + '0');
             index.push_back(' ');
             index.push_back(':');
             index.push_back(' ');
-            tape.push_back((char)(i + '0'));
-            tape = tape + "  : ";
-            Head.push_back((char)(i + '0'));
-            Head = Head + "  : ";
+            tape.push_back(i + '0');
+            tape += "  : ";
+            head.push_back(i + '0');
+            head+= "  : ";
         }
         else {
-            index.push_back((char)(t + '0'));
-            index.push_back((char)(i % 10 + '0'));
+            index.push_back(cnt + '0');
+            index.push_back(i % 10 + '0');
             index.push_back(':');
             index.push_back(' ');
-            tape.push_back((char)(t + '0'));
-            tape.push_back((char)(i % 10 + '0'));
+            tape.push_back(cnt + '0');
+            tape.push_back(i % 10 + '0');
             tape = tape + " : ";
-            Head.push_back((char)(t + '0'));
-            Head.push_back((char)(i % 10 + '0'));
-            Head = Head + " : ";
+            head.push_back(cnt + '0');
+            head.push_back(i % 10 + '0');
+            head = head + " : ";
         }
         cout << index;
         for (int j = Tapes[i].begin; j <= Tapes[i].end; j++) {
@@ -407,8 +423,8 @@ void TM::show_details() {
             }  
             cout << " ";
         }
-        cout << endl;
-        cout << tape;
+        cout << endl << tape;
+
         for (int j = 0; j < Tapes[i].content.length(); j++) {
             cout << Tapes[i].content[j];
             if ((Tapes[i].begin + j < 10) && (Tapes[i].begin + j > -10)) {
@@ -421,10 +437,10 @@ void TM::show_details() {
                 cout << "   ";
             }
         }
-        cout << endl;
-        cout << Head;
-        int pointpos = Tapes[i].ptr - Tapes[i].begin;
-        for (int j = 0; j < pointpos; j++) {
+        cout << endl << head;
+
+        int ptr = Tapes[i].ptr - Tapes[i].begin;
+        for (int j = 0; j < ptr; j++) {
             cout << " ";
             if ((Tapes[i].begin + j < 10) && (Tapes[i].begin + j > -10)) {
                 cout << " ";
@@ -470,8 +486,8 @@ void TM::show_parse() {
     cout << "\nTransition Functions: \n";
     for (auto& it : delta) {
         for (auto& iter : it.second) {
-            cout <<"(" << it.first << ", " << iter.first << ", ";
-            iter.second.show_trans();
+            cout <<"(" << it.first << ", " << iter.oldSym << ", ";
+            iter.show_trans();
         }
     }
 }

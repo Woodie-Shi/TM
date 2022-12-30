@@ -13,9 +13,10 @@ extern bool VERBOSE;
 class Transition {
 public:
     string newState;
+    string oldSym;
     string newSym;
     string dir;
-    Transition(string nst, string nsym, string d);
+    Transition(string nst, string osym, string nsym, string d);
     void show_trans();
 };
 
@@ -38,7 +39,7 @@ private:
     char B = '_';
     vector<string> F;
     int N;
-    unordered_map<string, unordered_map<string, Transition>> delta;
+    unordered_map<string, vector<Transition>> delta;
 
     string curState;
     vector<Tape> Tapes;
@@ -51,6 +52,7 @@ public:
     void turing(string& input);
     void check(string& input);
     void show_details();
+    int symbols_cmp(string pattern, string cur);
     void show_content();
     void show_parse();
 };
